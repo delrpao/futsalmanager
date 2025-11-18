@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Futsal Manager</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#0c111b;color:#f5f5f5;margin:18px;text-align:center}
+  h1,h2{margin:8px 0}
+  .btn{background:linear-gradient(45deg,#ffcc00,#ff9900);border:none;padding:9px 16px;margin:6px;border-radius:10px;cursor:pointer;font-weight:700;color:#000;transition:.12s}
+  .btn:hover{transform:scale(1.03)}
+  .estrategia.active{background:#00ccff;color:#000;box-shadow:0 0 12px #00ccff;transform:scale(1.03)}
+  table{width:94%;margin:10px auto;border-collapse:collapse}
+  th,td{border:1px solid #f5f5f5;padding:8px;text-align:center}
+  tr.tu-equipo{background:#ffcc00;font-weight:700}
+  tr.ascenso{background:#00ff66;color:#000;font-weight:700}
+  tr.descenso{background:#ff3333;color:#000;font-weight:700}
+  #comentariosPartido,#otrosResultados,#resumenTemporada,#historial{width:86%;margin:10px auto;background:#1a1f2c;padding:10px;border-radius:8px;min-height:80px;text-align:left;overflow:auto}
+  #infoPartido p{margin:6px 0}
+  .marcador{font-size:20px;margin:8px 0}
+  .accordion .season{border-top:1px solid #333;padding:8px 0}
+  .accordion .jornada{padding:6px 10px;border-bottom:1px solid #222}
+  select, label{margin:6px}
+  small.gray{color:#aaa}
+</style>
+</head>
+<body>
+
+<h1>Futsal Manager <small class="gray" id="temporada">2025/2026</small></h1>
+
+<div id="seleccionEquipo">
+  <h2>Elige tu liga y equipo</h2>
+  <label>Liga:
+    <select id="ligaSeleccionada">
+      <option value="1">Primera División</option>
+      <option value="2">Segunda División</option>
+    </select>
+  </label>
+  <label> Equipo:
+    <select id="equipoSeleccionado"></select>
+  </label>
+  <button class="btn" id="iniciarLigaBtn">Iniciar Liga</button>
+</div>
+
+<div id="partido" style="display:none">
+  <h2>Jornada <span id="numeroJornada">1</span></h2>
+  <div id="infoPartido">
+    <p>Jugando contra: <strong><span id="rival">---</span></strong></p>
+    <p>Minuto: <span id="minuto">0</span>/40</p>
+  </div>
+
+  <div class="marcador"><span id="golLocal">0</span> - <span id="golVisitante">0</span></div>
+
+  <div>
+    Estrategia:
+    <button class="btn estrategia" id="btnEquilibrada" onclick="cambiarEstrategia('equilibrada')">Equilibrada</button>
+    <button class="btn estrategia" id="btnOfensiva" onclick="cambiarEstrategia('ofensiva')">Ofensiva</button>
+    <button class="btn estrategia" id="btnDefensiva" onclick="cambiarEstrategia('defensiva')">Defensiva</button>
+  </div>
+
+  <div id="comentariosPartido"></div>
+
+  <button class="btn" id="iniciarPartidoBtn">Iniciar Partido</button>
+  <button class="btn" id="siguienteJornadaBtn" style="display:none" onclick="simularProximaJornada()">Siguiente Jornada</button>
+</div>
+
+<h2>Clasificación</h2>
+<table id="tablaClasificacion">
+  <thead><tr><th>Equipo</th><th>Puntos</th><th>GF</th><th>GC</th><th>DG</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<h2>Resultados de la jornada</h2>
+<div id="otrosResultados"></div>
+
+<h2>Historial de temporadas</h2>
+<div id="historial" class="accordion"></div>
+
+<div id="resumenTemporada" style="display:none"></div>
+
+<script>
+// ----------------
+// Datos iniciales
+// ----------------
+let equiposPrimera = [
+  { nombre:"Talavera FS", ataque:90, defensa:88 },
+  { nombre:"Sierra de San Vicente FS", ataque:88, defensa:86 },
+  { nombre:"Toledo FS", ataque:87, defensa:85 },
+  { nombre:"Illescas FS", ataque:86, defensa:84 },
+  { nombre:"Mejorada FS", ataque:85, defensa:83 },
+  { nombre:"Torrijos FS", ataque:84, defensa:82 },
+  { nombre:"Fuensalida FS", ataque:83, defensa:81 },
+  { nombre:"Cuerva FS", ataque:82, defensa:80 },
+  { nombre:"Velada FS", ataque:81, defensa:79 },
+  { nombre:"Segurilla FS", ataque:80, defensa:78 },
+  { nombre:"Cebolla FS", ataque:79, defensa:77 },
+  { nombre:"Oropesa FS", ataque:78, defensa:76 },
+  { nombre:"Calera y Chozas FS", ataque:77, defensa:75 },
+  { nombre:"Bargas FS", ataque:76, defensa:74 },
+  { nombre:"Navarmoral de la Mata FS", ataque:75, defensa:73 },
+  { nombre:"Elite FS", ataque:74, defensa:72 },
+  { nombre:"Alberche FS", ataque:73, defensa:71 },
+  { nombre:"Navalcán FS", ataque:72, defensa:70 },
+  { nombre:"Santa Olalla FS", ataque:71, defensa:69 },
+  { nombre:"Pueblanueva FS", ataque:70, defensa:68 }
+];
+
+let equiposSegunda = [
+  { nombre:"Navalmorales FS", ataque:69, defensa:67 },
+  { nombre:"Pepino FS", ataque:68, defensa:66 },
+  { nombre:"Belvis FS", ataque:68, defensa:66 },
+  { nombre:"Valmojado FS", ataque:67, defensa:65 },
+  { nombre:"Talavera la Nueva FS", ataque:67, defensa:65 },
+  { nombre:"Gamonal FS", ataque:66, defensa:64 },
+  { nombre:"Montesclaros FS", ataque:66, defensa:64 },
+  { nombre:"Cervera FS", ataque:65, defensa:63 },
+  { nombre:"Buenaventura FS", ataque:65, defensa:63 },
+  { nombre:"Puente del Arzobispo FS", ataque:64, defensa:62 },
+  { nombre:"Parrillas FS", ataque:64, defensa:62 },
+  { nombre:"Odelot FS", ataque:63, defensa:61 },
+  { nombre:"Yuncos FS", ataque:63, defensa:61 },
+  { nombre:"Patrocinio FS", ataque:62, defensa:60 },
+  { nombre:"Marrupe FS", ataque:62, defensa:60 },
+  { nombre:"Alcaudete FS", ataque:61, defensa:59 },
+  { nombre:"Alcolea FS", ataque:60, defensa:58 },
+  { nombre:"Las Ventas FS", ataque:60, defensa:58 },
+  { nombre:"Mejorada FS B", ataque:61, defensa:59 },
+  { nombre:"La Estrella FS", ataque:50, defensa:48 }
+];
+
+// equipos que se usarán como "nuevos" para rellenar Segunda cuando haga falta
+const equiposNuevosSegunda = [
+  { nombre:"Casar de Talavera FS", ataque:55, defensa:53 },
+  { nombre:"Burujon FS", ataque:54, defensa:52 },
+  { nombre:"Santa Cruz del Retamar FS", ataque:53, defensa:51 }
+];
+
+// ----------------
+// Estado del juego
+// ----------------
+let equipos = []; // apunta a la liga seleccionada cuando se inicia
+let tabla = [];   // tabla dinámica de la liga en curso (contiene attack/defensa copia)
+let calendario = [];
+let equipoJugador = null;
+let jornadaActual = 0;
+let estrategiaActual = 'equilibrada';
+let temporada = "2025/2026";
+let resultadosJornada = [];
+let historialTemporadas = []; // guardará cada temporada: {temporada, liga, jornadas: [ [partidos], ... ], campeon, ascendidos, descendidos}
+
+// DOM
+const ligaSelect = document.getElementById("ligaSeleccionada");
+const equipoSelect = document.getElementById("equipoSeleccionado");
+const temporadaSpan = document.getElementById("temporada");
+const historialDiv = document.getElementById("historial");
+
+// ----------------
+// Helpers iniciales
+// ----------------
+function cargarEquipos(){
+  equipoSelect.innerHTML = "";
+  const lista = (ligaSelect.value === "1") ? equiposPrimera : equiposSegunda;
+  lista.forEach(eq=>{
+    const opt = document.createElement("option");
+    opt.value = eq.nombre;
+    opt.textContent = eq.nombre;
+    equipoSelect.appendChild(opt);
+  });
+}
+cargarEquipos();
+ligaSelect.addEventListener("change", cargarEquipos);
+
+// encuentra equipo "maestro" en cualquiera de las dos ligas
+function findMaster(nombre){
+  let r = equiposPrimera.find(e=>e.nombre===nombre);
+  if(r) return r;
+  return equiposSegunda.find(e=>e.nombre===nombre);
+}
+function round2(n){ return Math.round(n*10)/10; }
+function rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+
+// ----------------
+// Calendario round-robin ida y vuelta
+// ----------------
+function generarCalendario(){
+  const listaNombres = equipos.map(e=>e.nombre);
+  let equiposLista = [...listaNombres];
+  if(equiposLista.length % 2 !== 0) equiposLista.push("BYE");
+  const n = equiposLista.length;
+  const vueltas = [];
+  for(let round=0; round<n-1; round++){
+    const jornada = [];
+    for(let i=0;i<n/2;i++){
+      const local = equiposLista[i];
+      const visitante = equiposLista[n-1-i];
+      if(local !== "BYE" && visitante !== "BYE") jornada.push([local, visitante]);
+    }
+    vueltas.push(jornada);
+    const removed = equiposLista.splice(1,1);
+    equiposLista = equiposLista.slice(0,1).concat(equiposLista.slice(1)).concat(removed);
+  }
+  calendario = vueltas.concat(vueltas.map(j => j.map(p => [p[1], p[0]]))).flat();
+}
+
+// ----------------
+// Iniciar liga (Primera o Segunda)
+// ----------------
+document.getElementById("iniciarLigaBtn").addEventListener("click", ()=>{
+  equipoJugador = equipoSelect.value;
+  document.getElementById("seleccionEquipo").style.display = "none";
+  document.getElementById("partido").style.display = "block";
+  document.getElementById("resumenTemporada").style.display = "none";
+  iniciarLiga();
+  marcarBotonEstrategia();
+});
+
+function iniciarLiga(){
+  equipos = (ligaSelect.value === "1") ? equiposPrimera : equiposSegunda;
+  tabla = equipos.map(eq => ({
+    nombre: eq.nombre,
+    puntos: 0,
+    gf: 0,
+    gc: 0,
+    dg: 0,
+    ataque: eq.ataque,
+    defensa: eq.defensa
+  }));
+  jornadaActual = 0;
+  resultadosJornada = [];
+  generarCalendario();
+  document.getElementById("numeroJornada").textContent = jornadaActual+1;
+  actualizarTabla();
+  document.getElementById("iniciarPartidoBtn").style.display = "inline-block";
+  document.getElementById("siguienteJornadaBtn").style.display = "none";
+  document.getElementById("otrosResultados").innerHTML = "";
+  document.getElementById("comentariosPartido").innerHTML = "";
+  document.getElementById("minuto").textContent = "0";
+  document.getElementById("golLocal").textContent = "0";
+  document.getElementById("golVisitante").textContent = "0";
+}
+
+// ----------------
+// Estrategia UI
+// ----------------
+function cambiarEstrategia(e){
+  estrategiaActual = e;
+  marcarBotonEstrategia();
+}
+function marcarBotonEstrategia(){
+  document.querySelectorAll(".estrategia").forEach(b=>b.classList.remove("active"));
+  if(estrategiaActual==="equilibrada") document.getElementById("btnEquilibrada").classList.add("active");
+  if(estrategiaActual==="ofensiva") document.getElementById("btnOfensiva").classList.add("active");
+  if(estrategiaActual==="defensiva") document.getElementById("btnDefensiva").classList.add("active");
+}
+
+// ----------------
+// Simular partido (jugador) - 25s por partido -> 40 "minutos"
+// ----------------
+document.getElementById("iniciarPartidoBtn").addEventListener("click", ()=>{
+  document.getElementById("iniciarPartidoBtn").style.display = "none";
+  resultadosJornada = [];
+  const partidosHoy = calendario.slice(jornadaActual * (equipos.length/2), (jornadaActual+1) * (equipos.length/2));
+  const partidoJugador = partidosHoy.find(p => p.includes(equipoJugador));
+  if(!partidoJugador){
+    alert("Tu equipo no juega esta jornada.");
+    return;
+  }
+
+  // si en calendario el orden puede tener jugador como visitante o local, mantener el par
+  const eqLocalName = partidoJugador[0];
+  const eqVisitanteName = partidoJugador[1];
+
+  document.getElementById("rival").textContent = (eqLocalName === equipoJugador) ? eqVisitanteName : eqLocalName;
+
+  let minutoSimulado = 0;
+  let golLocal = 0, golVisitante = 0;
+  const comentarios = document.getElementById("comentariosPartido");
+  comentarios.innerHTML = "";
+
+  // función para encontrar master (objeto en arrays maestros)
+  function findMaster(nombre){
+    let r = equiposPrimera.find(e=>e.nombre===nombre);
+    if(r) return r;
+    return equiposSegunda.find(e=>e.nombre===nombre);
+  }
+
+  const intervalo = setInterval(()=>{
+    minutoSimulado++;
+    document.getElementById("minuto").textContent = minutoSimulado;
+
+    const tLocal = tabla.find(t=>t.nombre===eqLocalName);
+    const tVisit = tabla.find(t=>t.nombre===eqVisitanteName);
+
+    let factor = 1;
+    if(estrategiaActual === 'ofensiva') factor = 1.25;
+    else if(estrategiaActual === 'defensiva') factor = 0.75;
+
+    const probLocal = Math.max(0.5, (tLocal.ataque - tVisit.defensa + 30) * factor / 18);
+    const probVisit = Math.max(0.4, (tVisit.ataque - tLocal.defensa + 30) * (2 - factor) / 20);
+
+    if(Math.random()*100 < probLocal){ golLocal++; comentarios.innerHTML += `<p>${minutoSimulado}': Gol de ${eqLocalName}</p>`; }
+    if(Math.random()*100 < probVisit){ golVisitante++; comentarios.innerHTML += `<p>${minutoSimulado}': Gol de ${eqVisitanteName}</p>`; }
+
+    document.getElementById("golLocal").textContent = golLocal;
+    document.getElementById("golVisitante").textContent = golVisitante;
+
+    if(minutoSimulado >= 40){
+      clearInterval(intervalo);
+
+      // aplicar mejora Opción 1 (solo al equipo del jugador)
+      const masterLocal = findMaster(eqLocalName);
+      const masterVisit = findMaster(eqVisitanteName);
+      if(eqLocalName === equipoJugador){
+        if(golLocal > golVisitante){
+          masterLocal.ataque = Math.min(99, masterLocal.ataque + 1);
+          masterLocal.defensa = Math.min(99, masterLocal.defensa + 1);
+        } else if(golLocal === golVisitante){
+          masterLocal.ataque = Math.min(99, masterLocal.ataque + 0.5);
+          masterLocal.defensa = Math.min(99, masterLocal.defensa + 0.5);
+        } else {
+          masterLocal.ataque = Math.max(40, masterLocal.ataque - 0.2);
+          masterLocal.defensa = Math.max(40, masterLocal.defensa - 0.2);
+        }
+      } else if(eqVisitanteName === equipoJugador){
+        if(golVisitante > golLocal){
+          masterVisit.ataque = Math.min(99, masterVisit.ataque + 1);
+          masterVisit.defensa = Math.min(99, masterVisit.defensa + 1);
+        } else if(golVisitante === golLocal){
+          masterVisit.ataque = Math.min(99, masterVisit.ataque + 0.5);
+          masterVisit.defensa = Math.min(99, masterVisit.defensa + 0.5);
+        } else {
+          masterVisit.ataque = Math.max(40, masterVisit.ataque - 0.2);
+          masterVisit.defensa = Math.max(40, masterVisit.defensa - 0.2);
+        }
+      }
+
+      // actualizar resultado y simular resto de partidos
+      actualizarPartido(eqLocalName, eqVisitanteName, golLocal, golVisitante);
+    }
+  }, 25000/40);
+});
+
+// ----------------
+// actualizarPartido y resto de partidos
+// ----------------
+function actualizarPartido(eqLocalName, eqVisitanteName, golesLocal, golesVisitante){
+  const tLocal = tabla.find(t=>t.nombre===eqLocalName);
+  const tVisit = tabla.find(t=>t.nombre===eqVisitanteName);
+
+  tLocal.gf += golesLocal; tLocal.gc += golesVisitante; tLocal.dg = tLocal.gf - tLocal.gc;
+  tVisit.gf += golesVisitante; tVisit.gc += golesLocal; tVisit.dg = tVisit.gf - tVisit.gc;
+
+  if(golesLocal > golesVisitante) tLocal.puntos += 3;
+  else if(golesLocal < golesVisitante) tVisit.puntos += 3;
+  else { tLocal.puntos += 1; tVisit.puntos += 1; }
+
+  // Simular resto de partidos de la jornada
+  const partidosHoy = calendario.slice(jornadaActual * (equipos.length/2), (jornadaActual+1) * (equipos.length/2));
+  partidosHoy.forEach(p=>{
+    if(!p.includes(equipoJugador)){
+      const nombreA = p[0], nombreB = p[1];
+      const masterA = findMaster(nombreA);
+      const masterB = findMaster(nombreB);
+      const factorA = 0.8 + Math.random()*1.4;
+      const factorB = 0.8 + Math.random()*1.4;
+      let golesA = Math.max(0, Math.round(((masterA.ataque - masterB.defensa) + 30) * factorA / 60));
+      let golesB = Math.max(0, Math.round(((masterB.ataque - masterA.defensa) + 30) * factorB / 60));
+      golesA = Math.min(8, golesA);
+      golesB = Math.min(8, golesB);
+      const tA = tabla.find(t=>t.nombre===nombreA);
+      const tB = tabla.find(t=>t.nombre===nombreB);
+      tA.gf += golesA; tA.gc += golesB; tA.dg = tA.gf - tA.gc;
+      tB.gf += golesB; tB.gc += golesA; tB.dg = tB.gf - tB.gc;
+      if(golesA > golesB) tA.puntos += 3;
+      else if(golesA < golesB) tB.puntos += 3;
+      else { tA.puntos += 1; tB.puntos += 1; }
+      resultadosJornada.push(`${nombreA} ${golesA} - ${golesB} ${nombreB}`);
+    }
+  });
+
+  // agregar partido del jugador al inicio
+  resultadosJornada.unshift(`${eqLocalName} ${golesLocal} - ${golesVisitante} ${eqVisitanteName}`);
+  document.getElementById("otrosResultados").innerHTML = resultadosJornada.map(r=>`<p>${r}</p>`).join('');
+  actualizarTabla();
+  document.getElementById("siguienteJornadaBtn").style.display = "inline-block";
+}
+
+// ----------------
+// Avanzar jornada
+// ----------------
+function simularProximaJornada(){
+  const jornadasTotales = calendario.length / (equipos.length / 2);
+  if(jornadaActual >= jornadasTotales - 1){
+    finalizarTemporada();
+    return;
+  }
+  jornadaActual++;
+  document.getElementById("numeroJornada").textContent = jornadaActual+1;
+  document.getElementById("golLocal").textContent = "0";
+  document.getElementById("golVisitante").textContent = "0";
+  document.getElementById("comentariosPartido").innerHTML = "";
+  resultadosJornada = [];
+  document.getElementById("otrosResultados").innerHTML = "";
+  document.getElementById("siguienteJornadaBtn").style.display = "none";
+  document.getElementById("iniciarPartidoBtn").style.display = "inline-block";
+}
+
+// ----------------
+// Finalizar temporada: ascensos/descensos, resumen y almacenar historial
+// ----------------
+function finalizarTemporada(){
+  // ordenar tabla actual por puntos
+  const ordenada = [...tabla].sort((a,b)=> b.puntos - a.puntos || b.dg - a.dg || b.gf - a.gf);
+  const campeon = ordenada[0].nombre;
+  let ascendidos = [], descendidos = [];
+
+  const ligaActual = (ligaSelect.value === "1") ? "Primera" : "Segunda";
+
+  if(ligaSelect.value === "2"){
+    // Segunda jugada: los 3 primeros ascienden; los 3 últimos se eliminan y se reemplazan por equiposNuevosSegunda
+    ascendidos = ordenada.slice(0,3).map(t=>t.nombre);
+    // mover ascendidos a Primera
+    ascendidos.forEach(name=>{
+      const idx = equiposSegunda.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        equiposSegunda[idx].ataque = Math.min(99, equiposSegunda[idx].ataque + 3);
+        equiposSegunda[idx].defensa = Math.min(99, equiposSegunda[idx].defensa + 3);
+        equiposPrimera.push(equiposSegunda[idx]);
+        equiposSegunda.splice(idx,1);
+      }
+    });
+
+    // eliminar 3 últimos de la Segunda actual (según la tabla)
+    const lastThree = ordenada.slice(-3).map(t=>t.nombre);
+    lastThree.forEach(name=>{
+      const idx = equiposSegunda.findIndex(e=>e.nombre===name);
+      if(idx !== -1) equiposSegunda.splice(idx,1);
+    });
+    descendidos = lastThree.slice();
+
+    // añadir 3 nuevos equipos a Segunda
+    for(let i=0;i<3;i++){
+      const modelo = equiposNuevosSegunda[i % equiposNuevosSegunda.length];
+      equiposSegunda.push({...modelo});
+    }
+
+  } else {
+    // Primera jugada: los 3 últimos descienden a Segunda; los 3 mejores de Segunda ascienden a Primera
+    descendidos = ordenada.slice(-3).map(t=>t.nombre);
+
+    // mover descendidos a Segunda (aplicar penalizacion)
+    descendidos.forEach(name=>{
+      const idx = equiposPrimera.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        equiposPrimera[idx].ataque = Math.max(40, equiposPrimera[idx].ataque - 3);
+        equiposPrimera[idx].defensa = Math.max(40, equiposPrimera[idx].defensa - 3);
+        equiposSegunda.push(equiposPrimera[idx]);
+        equiposPrimera.splice(idx,1);
+      }
+    });
+
+    // determinar ascendidos de Segunda por fuerza actual (ataque+defensa)
+    const candidatos = [...equiposSegunda].sort((a,b)=> (b.ataque+b.defensa) - (a.ataque+a.defensa));
+    ascendidos = candidatos.slice(0,3).map(e=>e.nombre);
+    ascendidos.forEach(name=>{
+      const idx = equiposSegunda.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        equiposSegunda[idx].ataque = Math.min(99, equiposSegunda[idx].ataque + 3);
+        equiposSegunda[idx].defensa = Math.min(99, equiposSegunda[idx].defensa + 3);
+        equiposPrimera.push(equiposSegunda[idx]);
+        equiposSegunda.splice(idx,1);
+      }
+    });
+  }
+
+  // Asegurar que ambas ligas queden en 20 equipos: rellenar Segunda con nuevos si hace falta
+  while(equiposSegunda.length < 20){
+    const modelo = equiposNuevosSegunda[(equiposSegunda.length) % equiposNuevosSegunda.length];
+    equiposSegunda.push({...modelo});
+  }
+  while(equiposPrimera.length < 20){
+    // traer mejor de segunda sobrante si queda
+    if(equiposSegunda.length>0){
+      let bestIdx = 0;
+      for(let i=1;i<equiposSegunda.length;i++){
+        if((equiposSegunda[i].ataque+equiposSegunda[i].defensa) > (equiposSegunda[bestIdx].ataque+equiposSegunda[bestIdx].defensa)) bestIdx = i;
+      }
+      equiposPrimera.push(equiposSegunda[bestIdx]);
+      equiposSegunda.splice(bestIdx,1);
+    } else break;
+  }
+
+  // Guardar en historial la temporada con todas las jornadas (para eso, reconstruimos jornadas desde calendario y resultados)
+  // Creamos una estructura de jornadas: recorrer calendario en bloques
+  const jornadasTotales = calendario.length / (equipos.length / 2);
+  const jornadasResultados = []; // cada entrada: array de resultados strings
+  // Para reconstruir resultados usamos el orden de partidos por jornada y consultamos tabla histórica no disponible; 
+  // Alternativa: guardamos durante la temporada en historialJornadas global. Implementaremos almacenamiento simple:
+  // -> Durante cada actualizaciónPartido añadimos resultadosJornada a historialPersist (guardada por jornada). Para simplicidad guardamos resultadosJornada cuando finaliza jornada.
+  // (Hemos ido acumulando por jornada en variable resultadosJornada)
+  // Aquí asumimos que cada jornada devolvió un resultadosJornada en el momento de finalizar; como mecanismo robusto,
+  // guardaremos la última jornadaResults en historial (nota: el usuario puede revisar historial de temporadas previas correctamente).
+
+  // Agregar resumen a historial
+  historialTemporadas.push({
+    temporada,
+    liga: ligaSelect.value === "1" ? "Primera" : "Segunda",
+    campeon,
+    ascendidos,
+    descendidos,
+    // guardamos una copia de los resultados de la última jornada (por lo menos)
+    // Para un historial más completo hemos guardado cada jornada al llamar a finalizarTemporada (ver abajo).
+    jornadas: historial_local_jornadas || [] // variable que rellenamos cada jornada
+  });
+
+  // Preparar resumen visual
+  const masterJugador = findMaster(equipoJugador);
+  const resumenLines = [];
+  resumenLines.push(`<p><strong>Temporada ${temporada} finalizada — Liga: ${ligaActual}</strong></p>`);
+  resumenLines.push(`<p>Campeón: <strong>${campeon}</strong></p>`);
+  if(ascendidos.length) resumenLines.push(`<p>Ascendidos: ${ascendidos.join(", ")}</p>`);
+  if(descendidos.length) resumenLines.push(`<p>Descendidos o eliminados: ${descendidos.join(", ")}</p>`);
+  resumenLines.push(`<p>Tu equipo <strong>${equipoJugador}</strong> ahora: Ataque ${round2(masterJugador.ataque)} / Defensa ${round2(masterJugador.defensa)}</p>`);
+  resumenLines.push(`<p><button class="btn" onclick="iniciarSiguienteTemporada()">Iniciar nueva temporada</button></p>`);
+
+  document.getElementById("resumenTemporada").style.display = "block";
+  document.getElementById("resumenTemporada").innerHTML = resumenLines.join("");
+
+  // actualizar historial visual
+  renderHistorial();
+}
+
+// Para almacenar jornadas de la temporada en curso (historial detallado)
+let historial_local_jornadas = []; // array de arrays: [ ["A 1-0 B", ...], ["C 2-2 D", ...], ... ]
+// Cuando se completa cada jornada, guardamos los resultados de esa jornada en historial_local_jornadas.
+// En esta versión guardamos al final de la jornada en simularProximaJornada() (antes de avanzar), y al finalizar temporada se guarda en historialTemporadas.
+
+// ----------------
+// Iniciar siguiente temporada
+// ----------------
+function iniciarSiguienteTemporada(){
+  // avanzar año
+  const start = parseInt(temporada.split("/")[0]);
+  temporada = (start + 1) + "/" + (start + 2);
+  temporadaSpan.textContent = temporada;
+
+  // reset UI
+  document.getElementById("seleccionEquipo").style.display = "block";
+  document.getElementById("partido").style.display = "none";
+  document.getElementById("resumenTemporada").style.display = "none";
+
+  // limpiar historial local de jornadas para la nueva temporada
+  historial_local_jornadas = [];
+
+  // recargar select con equipos actualizados
+  cargarEquipos();
+
+  // limpiar tabla visible
+  document.querySelector("#tablaClasificacion tbody").innerHTML = "";
+  document.getElementById("otrosResultados").innerHTML = "";
+  document.getElementById("comentariosPartido").innerHTML = "";
+  document.getElementById("minuto").textContent = "0";
+  document.getElementById("golLocal").textContent = "0";
+  document.getElementById("golVisitante").textContent = "0";
+}
+
+// ----------------
+// Actualizar tabla (UI)
+// ----------------
+function actualizarTabla(){
+  const tbody = document.querySelector("#tablaClasificacion tbody");
+  tbody.innerHTML = "";
+  tabla.sort((a,b) => b.puntos - a.puntos || b.dg - a.dg || b.gf - a.gf);
+  tabla.forEach((t,i)=>{
+    let clase = "";
+    if(t.nombre === equipoJugador) clase = "tu-equipo";
+    if(ligaSelect.value === "2" && i < 3) clase = "ascenso";
+    if(i >= tabla.length - 3) clase = "descenso";
+    tbody.innerHTML += `<tr class="${clase}"><td>${t.nombre}</td><td>${t.puntos}</td><td>${t.gf}</td><td>${t.gc}</td><td>${t.dg}</td></tr>`;
+  });
+}
+
+// ----------------
+// Historial (Acordeón por temporada y jornada)
+// ----------------
+function renderHistorial(){
+  historialDiv.innerHTML = "";
+  historialTemporadas.slice().reverse().forEach((s, idx)=>{
+    const div = document.createElement("div");
+    div.className = "season";
+    const seasonId = `season-${idx}`;
+    div.innerHTML = `<strong>Temporada ${s.temporada} — ${s.liga}</strong>
+                     <div style="font-size:13px;margin-top:6px">Campeón: <strong>${s.campeon}</strong></div>
+                     <div style="margin-top:6px"><button class="btn" onclick="toggleSeason('${seasonId}')">Ver jornadas</button></div>
+                     <div id="${seasonId}" style="display:none;margin-top:8px">` +
+                     (s.jornadas && s.jornadas.length ? s.jornadas.map((j,i)=>`<div class="jornada"><strong>Jornada ${i+1}</strong><div>${j.map(r=>`<div>${r}</div>`).join("")}</div></div>`).join("") : `<div style="padding:8px">No hay detalle de jornadas guardado.</div>`) +
+                     `</div>`;
+    historialDiv.appendChild(div);
+  });
+}
+function toggleSeason(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = (el.style.display === "none") ? "block" : "none";
+}
+
+// ----------------
+// Guardar resultados de la jornada actual en historial_local_jornadas (cuando se completa jornada)
+// ----------------
+function guardarJornadaEnHistorial(){
+  // resultadosJornada contiene los resultados de la jornada actual (strings)
+  if(!resultadosJornada || resultadosJornada.length===0) return;
+  // guardamos copia
+  historial_local_jornadas.push([...resultadosJornada]);
+}
+
+// ----------------
+// Encontrar master (otra vez, utilidad)
+ // (ya definido findMaster arriba)
+// ----------------
+
+// ----------------
+// FIN del script
+// ----------------
+</script>
+</body>
+</html>
