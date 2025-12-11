@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Futsal Manager</title>
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#0c111b;color:#f5f5f5;margin:18px;text-align:center}
+  h1,h2{margin:8px 0}
+  .btn{background:linear-gradient(45deg,#ffcc00,#ff9900);border:none;padding:9px 16px;margin:6px;border-radius:10px;cursor:pointer;font-weight:700;color:#000;transition:.12s}
+  .btn:hover{transform:scale(1.03)}
+  .estrategia.active{background:#00ccff;color:#000;box-shadow:0 0 12px #00ccff;transform:scale(1.03)}
+  table{width:94%;margin:10px auto;border-collapse:collapse}
+  th,td{border:1px solid #f5f5f5;padding:8px;text-align:center}
+  tr.tu-equipo{background:#ffcc00;font-weight:700}
+  tr.ascenso{background:#00ff66;color:#000;font-weight:700}
+  tr.descenso{background:#ff3333;color:#000;font-weight:700}
+  #comentariosPartido,#otrosResultados,#resumenTemporada,#historial{width:86%;margin:10px auto;background:#1a1f2c;padding:10px;border-radius:8px;min-height:80px;text-align:left;overflow:auto}
+  #infoPartido p{margin:6px 0}
+  .marcador{font-size:20px;margin:8px 0}
+  .accordion .season{border-top:1px solid #333;padding:8px 0}
+  .accordion .jornada{padding:6px 10px;border-bottom:1px solid #222}
+  select, label{margin:6px}
+  small.gray{color:#aaa}
+  #posicionesHistoricas{width:90%;margin:6px auto;text-align:left;background:#121419;padding:10px;border-radius:8px}
+  .transfer-options .btn{display:block;margin:6px 0}
+  .cinematica{background:#0b3b3b;padding:12px;border-radius:8px;margin:8px 0}
+
+  /* Selection UI (more visual) */
+  #seleccionEquipo{max-width:900px;margin:0 auto}
+  .team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:8px}
+  .team-card{background:#0f1720;border:1px solid #29313b;padding:10px;border-radius:8px;cursor:pointer;transition:transform .12s,box-shadow .12s;text-align:left}
+  .team-card:hover{transform:translateY(-4px);box-shadow:0 6px 18px rgba(0,0,0,.6)}
+  .team-card.selected{outline:3px solid #ffd24d}
+  .team-name{font-weight:800;color:#ffd24d}
+  .strength-bar{height:8px;border-radius:6px;background:#223;overflow:hidden;margin-top:8px}
+  .strength-fill{height:100%;background:linear-gradient(90deg,#2ecc71,#27ae60);width:50%}
+  .team-meta{font-size:12px;color:#9aa3b2;margin-top:6px}
+
+  /* Pitch (mini campo) */
+  .pitch-container{width:320px;margin:10px auto;background:#0a4b0a;padding:10px;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,0.6)}
+  .pitch{width:300px;height:160px;background:linear-gradient(#0b7a0b,#0b6b0b);border:2px solid #ffffff33;position:relative;margin:0 auto;border-radius:4px}
+  .pitch .line{position:absolute;background:rgba(255,255,255,0.35)}
+  .pitch .centerline{left:50%;top:0;bottom:0;width:2px;margin-left:-1px}
+  .pitch .centercircle{left:50%;top:50%;width:36px;height:36px;margin-left:-18px;margin-top:-18px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);position:absolute}
+  .pitch .goal{width:10px;height:34px;background:rgba(255,255,255,0.25);position:absolute;top:50%;margin-top:-17px}
+  .pitch .goal.left{left:-6px}
+  .pitch .goal.right{right:-6px}
+  .ball{width:12px;height:12px;background:#fff;border-radius:50%;position:absolute;left:50%;top:50%;margin-left:-6px;margin-top:-6px;box-shadow:0 0 6px #fff}
+  .goal-flash{position:absolute;left:50%;top:6px;transform:translateX(-50%);color:#000;background:#ff0;padding:6px 10px;border-radius:6px;display:none;font-weight:700}
+</style>
+</head>
+<body>
+
+<h1>Futsal Manager <small class="gray" id="temporada">2025/2026</small></h1>
+
+<div id="seleccionEquipo">
+  <h2>Elige tu liga y equipo</h2>
+  <label>Liga:
+    <select id="ligaSeleccionada">
+      <option value="1">Primera División</option>
+      <option value="2">Segunda División</option>
+      <option value="3">Tercera División</option>
+    </select>
+  </label>
+
+  <!-- Hidden select kept for compatibility; cards are the visual selector -->
+  <label style="display:none"> Equipo:
+    <select id="equipoSeleccionado"></select>
+  </label>
+
+  <div id="teamGridWrapper"></div>
+
+  <div style="margin-top:8px">
+    <button class="btn" id="iniciarLigaBtn">Iniciar Liga</button>
+  </div>
+</div>
+
+<div id="partido" style="display:none">
+  <h2>Jornada <span id="numeroJornada">1</span> / 38</h2>
+  <div id="infoPartido">
+    <p>Jugando contra: <strong><span id="rival">---</span></strong></p>
+    <p>Minuto: <span id="minuto">0</span>/40</p>
+  </div>
+
+  <div class="marcador"><span id="golLocal">0</span> - <span id="golVisitante">0</span></div>
+
+  <div>
+    Estrategia:
+    <button class="btn estrategia" id="btnEquilibrada" onclick="cambiarEstrategia('equilibrada')">Equilibrada</button>
+    <button class="btn estrategia" id="btnOfensiva" onclick="cambiarEstrategia('ofensiva')">Ofensiva</button>
+    <button class="btn estrategia" id="btnDefensiva" onclick="cambiarEstrategia('defensiva')">Defensiva</button>
+  </div>
+
+  <div style="margin-top:8px">
+    <button class="btn" id="iniciarPartidoBtn">Iniciar Partido</button>
+    <button class="btn" id="siguienteJornadaBtn" style="display:none" onclick="siguienteJornadaFromUI()">Siguiente Jornada</button>
+  </div>
+
+  <div id="comentariosPartido" style="margin-top:10px"></div>
+
+  <!-- Mini pitch -->
+  <div id="pitchWrapper" style="display:none">
+    <div class="pitch-container">
+      <div class="goal-flash" id="goalFlash">GOL!</div>
+      <div class="pitch" id="pitch">
+        <div class="line centerline"></div>
+        <div class="line centercircle"></div>
+        <div class="goal left"></div>
+        <div class="goal right"></div>
+        <div class="ball" id="ball" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Clasificación</h2>
+<table id="tablaClasificacion">
+  <thead><tr><th>Equipo</th><th>Puntos</th><th>GF</th><th>GC</th><th>DG</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<h2>Resultados de la jornada</h2>
+<div id="otrosResultados"></div>
+
+<h2>Historial de temporadas</h2>
+<div id="historial" class="accordion"></div>
+
+<div id="resumenTemporada" style="display:none"></div>
+
+<div id="posicionesHistoricas" style="display:block">
+  <h3>Posiciones históricas de tu equipo</h3>
+  <div id="posicionesList">No hay temporadas jugadas todavía.</div>
+</div>
+
+<script>
+// -------------------- Datos de equipos --------------------
+
+const liga1 = [
+  { nombre:"Talavera FS", ataque:85, defensa:83 },
+  { nombre:"Toledo FS", ataque:85, defensa:84 },
+  { nombre:"Tomelloso FS", ataque:82, defensa:81 },
+  { nombre:"Sierra de San Vicente FS", ataque:80, defensa:80 },
+  { nombre:"Illescas FS", ataque:80, defensa:80 },
+  { nombre:"Torrijos FS", ataque:79, defensa:81 },
+  { nombre:"Fuensalida FS", ataque:83, defensa:80 },
+  { nombre:"Sonseca FS", ataque:82, defensa:79 },
+  { nombre:"Yuncos FS", ataque:78, defensa:80 },
+  { nombre:"Bargas FS", ataque:79, defensa:78 },
+  { nombre:"Santa Cruz del Retamar FS", ataque:79, defensa:78 },
+  { nombre:"Cebolla FS", ataque:77, defensa:78 },
+  { nombre:"Mejorada FS", ataque:78, defensa:77 },
+  { nombre:"Oropesa FS", ataque:76, defensa:77 },
+  { nombre:"Cuerva FS", ataque:75, defensa:77 },
+  { nombre:"Noves FS", ataque:78, defensa:77 },
+  { nombre:"Escalona FS", ataque:78, defensa:77 },
+  { nombre:"Aguila FS", ataque:75, defensa:76 },
+  { nombre:"Calera y Chozas FS", ataque:76, defensa:75 },
+  { nombre:"Alberche FS", ataque:73, defensa:75 }
+];
+
+const liga2 = [
+  { nombre:"Santa Olalla FS", ataque:72, defensa:71 },
+  { nombre:"Pueblanueva FS", ataque:73, defensa:74 },
+  { nombre:"Cazalegas FS", ataque:72, defensa:73 },
+  { nombre:"Elite FS", ataque:71, defensa:71 },
+  { nombre:"Velada FS", ataque:72, defensa:72 },
+  { nombre:"Segurilla FS", ataque:70, defensa:72 },
+  { nombre:"Navarmoral de la Mata FS", ataque:74, defensa:72 },
+  { nombre:"Menansalbas FS", ataque:71, defensa:72 },
+  { nombre:"Camarena FS", ataque:72, defensa:69 },
+  { nombre:"Casar de Escalona FS", ataque:74, defensa:70 },
+  { nombre:"Odelot FS", ataque:65, defensa:70 },
+  { nombre:"Patrocinio FS", ataque:69, defensa:69 },
+  { nombre:"Puente del Arzobispo FS", ataque:68, defensa:70 },
+  { nombre:"Burujón FS", ataque:70, defensa:70 },
+  { nombre:"Navarmorales FS", ataque:70, defensa:70 },
+  { nombre:"Pedro Bernardo FS", ataque:74, defensa:70 },
+  { nombre:"Navalucillos FS", ataque:70, defensa:71 },
+  { nombre:"Villaluenga FS", ataque:71, defensa:71 },
+  { nombre:"Maqueda FS", ataque:68, defensa:70 },
+  { nombre:"Belvis FS", ataque:67, defensa:69 }
+];
+
+const liga3 = [
+  { nombre:"Las Ventas FS", ataque:68, defensa:68 },
+  { nombre:"Alcaudete FS", ataque:67, defensa:67 },
+  { nombre:"Parrillas FS", ataque:67, defensa:66 },
+  { nombre:"Nombela FS", ataque:65, defensa:66 },
+  { nombre:"Pepino FS", ataque:66, defensa:65 },
+  { nombre:"Candeleda FS", ataque:64, defensa:65 },
+  { nombre:"Talavera la Nueva FS", ataque:66, defensa:65 },
+  { nombre:"Alcolea FS", ataque:66, defensa:66 },
+  { nombre:"Lucillos FS", ataque:64, defensa:66 },
+  { nombre:"Gamonal FS", ataque:66, defensa:65 },
+  { nombre:"Portillo FS", ataque:66, defensa:65 },
+  { nombre:"Valmojado FS", ataque:64, defensa:64 },
+  { nombre:"Casar de Talavera FS", ataque:64, defensa:64 },
+  { nombre:"Mejorada FS B", ataque:63, defensa:63 },
+  { nombre:"Sotillo FS", ataque:63, defensa:63 },
+  { nombre:"Cervera FS", ataque:62, defensa:63 },
+  { nombre:"Buenaventura FS", ataque:63, defensa:64 },
+  { nombre:"Marrupe FS", ataque:63, defensa:63 },
+  { nombre:"Aldeanovita FS", ataque:62, defensa:62 },
+  { nombre:"La Estrella FS", ataque:62, defensa:61 }
+];
+
+const equiposNuevosTercera = [
+  { nombre:"Navahermosa FS", ataque:60, defensa:60 },
+  { nombre:"Fuente Albilla FS", ataque:59, defensa:59 },
+  { nombre:"Ocaña FS", ataque:58, defensa:58 }
+];
+
+// -------------------- Estado --------------------
+
+let equipos = [];
+let tabla = [];
+let calendario = [];
+let equipoJugador = null;
+let jornadaActual = 0; // 0-index
+let estrategiaActual = 'equilibrada';
+let temporada = "2025/2026";
+let resultadosJornada = [];
+let historialTemporadas = [];
+
+let historial_local_jornadas = [];
+let posicionesHistoricas = []; // guarda { temporada, posicion }
+
+// Protecciones/flags para evitar duplicados
+let seasonFinalized = false;
+let ultimaJornadaGuardada = -1;
+
+const TOTAL_JORNADAS = 38;
+
+const ligaSelect = document.getElementById("ligaSeleccionada");
+const equipoSelect = document.getElementById("equipoSeleccionado");
+const temporadaSpan = document.getElementById("temporada");
+const historialDiv = document.getElementById("historial");
+
+// Pitch elements & animation state
+const pitchWrapper = document.getElementById("pitchWrapper");
+const pitchEl = document.getElementById("pitch");
+const ballEl = document.getElementById("ball");
+const goalFlashEl = document.getElementById("goalFlash");
+let pitchInterval = null;
+let pitchAnimating = false;
+
+// -------------------- Utilidades --------------------
+
+function round2(n){ return Math.round(n*10)/10; }
+function rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+
+function findMaster(nombre){
+  let r = liga1.find(e=>e.nombre===nombre);
+  if(r) return r;
+  r = liga2.find(e=>e.nombre===nombre);
+  if(r) return r;
+  return liga3.find(e=>e.nombre===nombre);
+}
+
+// Poisson sampler (Knuth)
+function samplePoisson(lambda){
+  const L = Math.exp(-lambda);
+  let k = 0;
+  let p = 1;
+  do {
+    k++;
+    p *= Math.random();
+  } while (p > L);
+  return k - 1;
+}
+
+// Simular goles con distribución realista de futsal (sin límite superior)
+function simulateGoals(masterA, masterB, factorA=1, factorB=1){
+  const strengthA = masterA.ataque * 1.0 + masterA.defensa * 0.6;
+  const strengthB = masterB.ataque * 1.0 + masterB.defensa * 0.6;
+  const diff = (strengthA - strengthB) / 10;
+  let lambdaA = 3.2 + diff + (Math.random()-0.5)*1.8;
+  let lambdaB = 3.0 - diff + (Math.random()-0.5)*1.8;
+  lambdaA *= factorA;
+  lambdaB *= factorB;
+  lambdaA = Math.max(0.05, lambdaA);
+  lambdaB = Math.max(0.05, lambdaB);
+  const golesA = samplePoisson(lambdaA);
+  const golesB = samplePoisson(lambdaB);
+  return [golesA, golesB];
+}
+
+// -------------------- Pitch animation helpers --------------------
+
+function startPitchAnimation(){
+  if(pitchAnimating) return;
+  pitchAnimating = true;
+  pitchWrapper.style.display = "block";
+  ballEl.style.display = "block";
+  pitchInterval = setInterval(()=>{
+    const pw = pitchEl.clientWidth, ph = pitchEl.clientHeight;
+    const x = rand(6, pw-6);
+    const y = rand(6, ph-6);
+    ballEl.style.transition = 'left 0.25s linear, top 0.25s linear';
+    ballEl.style.left = x + 'px';
+    ballEl.style.top = y + 'px';
+  }, 200);
+}
+
+function stopPitchAnimation(){
+  pitchAnimating = false;
+  clearInterval(pitchInterval);
+  pitchInterval = null;
+  ballEl.style.display = "none";
+  setTimeout(()=>{ pitchWrapper.style.display = "none"; }, 350);
+}
+
+function flashGoal(){
+  goalFlashEl.style.display = 'block';
+  setTimeout(()=>{ goalFlashEl.style.display = 'none'; }, 700);
+}
+
+// -------------------- UI Inicial / selector visual --------------------
+
+function renderTeamGrid(){
+  const wrapper = document.getElementById('teamGridWrapper');
+  wrapper.innerHTML = '';
+  const lista = (ligaSelect.value === "1") ? liga1 : (ligaSelect.value === "2") ? liga2 : liga3;
+  const grid = document.createElement('div');
+  grid.className = 'team-grid';
+  lista.forEach(eq => {
+    const card = document.createElement('div');
+    card.className = 'team-card';
+    card.dataset.name = eq.nombre;
+    card.innerHTML = `<div class="team-name">${eq.nombre}</div>
+                      <div class="team-meta">Liga ${ (ligaSelect.value==="1") ? "1" : (ligaSelect.value==="2") ? "2" : "3" }</div>
+                      <div class="strength-bar"><div class="strength-fill" style="width:${Math.min(98, Math.max(20, (eq.ataque + eq.defensa)/2 ))}%"></div></div>`;
+    card.onclick = ()=>{
+      document.querySelectorAll('.team-card').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      equipoSelect.value = eq.nombre;
+    };
+    grid.appendChild(card);
+  });
+  wrapper.appendChild(grid);
+  // preselect first team
+  const first = grid.querySelector('.team-card');
+  if(first){
+    first.classList.add('selected');
+    equipoSelect.value = first.dataset.name;
+  }
+}
+renderTeamGrid();
+ligaSelect.addEventListener('change', ()=>{
+  renderTeamGrid();
+  cargarEquipos(); // mantiene el select actualizado internamente
+});
+
+function cargarEquipos(){
+  equipoSelect.innerHTML = "";
+  const lista = (ligaSelect.value === "1") ? liga1 : (ligaSelect.value === "2") ? liga2 : liga3;
+  lista.forEach(eq=>{
+    const opt = document.createElement("option");
+    opt.value = eq.nombre;
+    opt.textContent = eq.nombre;
+    equipoSelect.appendChild(opt);
+  });
+}
+cargarEquipos();
+
+// -------------------- Calendario --------------------
+
+function generarCalendario(){
+  let listaNombres = equipos.map(e=>e.nombre);
+  listaNombres = Array.from(new Set(listaNombres)).slice(0,20);
+
+  if(listaNombres.length < 2){
+    calendario = [];
+    return;
+  }
+
+  while(listaNombres.length < 20){
+    const fillerName = `FillTeam ${listaNombres.length+1}`;
+    listaNombres.push(fillerName);
+    if(!findMaster(fillerName)){
+      liga3.push({ nombre: fillerName, ataque:60, defensa:60 });
+    }
+  }
+
+  let equiposLista = [...listaNombres];
+  if(equiposLista.length % 2 !== 0) equiposLista.push("BYE");
+  const n = equiposLista.length;
+  const vueltas = [];
+  for(let round=0; round<n-1; round++){
+    const jornada = [];
+    for(let i=0;i<n/2;i++){
+      const local = equiposLista[i];
+      const visitante = equiposLista[n-1-i];
+      if(local !== "BYE" && visitante !== "BYE") jornada.push([local, visitante]);
+    }
+    vueltas.push(jornada);
+    const removed = equiposLista.splice(1,1);
+    equiposLista = equiposLista.slice(0,1).concat(equiposLista.slice(1)).concat(removed);
+  }
+  calendario = vueltas.concat(vueltas.map(j => j.map(p => [p[1], p[0]]))).flat();
+
+  const partidosPorJornada = 20/2;
+  const neededMatches = TOTAL_JORNADAS * partidosPorJornada;
+  if(calendario.length > neededMatches){
+    calendario = calendario.slice(0, neededMatches);
+  } else {
+    let i = 0;
+    while(calendario.length < neededMatches){
+      const jornada = vueltas[i % vueltas.length];
+      const jornadaCopy = jornada.map(p => [p[0], p[1]]);
+      calendario = calendario.concat(jornadaCopy);
+      i++;
+    }
+  }
+}
+
+// Obtener partidos de la jornada actual
+function getPartidosHoy(){
+  const matchesPerJornada = 20 / 2;
+  const start = jornadaActual * matchesPerJornada;
+  return calendario.slice(start, start + matchesPerJornada);
+}
+
+// Obtener partido del jugador en la jornada actual (o null)
+function getPartidoJugadorHoy(){
+  const partidosHoy = getPartidosHoy();
+  return partidosHoy.find(p => p.includes(equipoJugador)) || null;
+}
+
+// Actualizar UI con el partido de la jornada actual (rival, reset marcador si necesario)
+function setCurrentMatchUI(){
+  const partido = getPartidoJugadorHoy();
+  document.getElementById("numeroJornada").textContent = jornadaActual+1;
+  document.querySelector('#partido h2').innerHTML = `Jornada <span id="numeroJornada">${jornadaActual+1}</span> / ${TOTAL_JORNADAS}`;
+  if(partido){
+    const eqLocalName = partido[0], eqVisitanteName = partido[1];
+    const rivalName = (eqLocalName === equipoJugador) ? eqVisitanteName : eqLocalName;
+    document.getElementById("rival").textContent = rivalName;
+    document.getElementById("minuto").textContent = "0";
+    document.getElementById("golLocal").textContent = "0";
+    document.getElementById("golVisitante").textContent = "0";
+    document.getElementById("comentariosPartido").innerHTML = "";
+    document.getElementById("iniciarPartidoBtn").style.display = "inline-block";
+  } else {
+    document.getElementById("rival").textContent = "No juegas esta jornada";
+    document.getElementById("minuto").textContent = "0";
+    document.getElementById("golLocal").textContent = "0";
+    document.getElementById("golVisitante").textContent = "0";
+    document.getElementById("comentariosPartido").innerHTML = "<p>No juegas esta jornada.</p>";
+    document.getElementById("iniciarPartidoBtn").style.display = "none";
+  }
+}
+
+// -------------------- Iniciar liga --------------------
+
+document.getElementById("iniciarLigaBtn").addEventListener("click", ()=>{
+  equipoJugador = equipoSelect.value;
+  document.getElementById("seleccionEquipo").style.display = "none";
+  document.getElementById("partido").style.display = "block";
+  document.getElementById("resumenTemporada").style.display = "none";
+
+  seasonFinalized = false;
+  ultimaJornadaGuardada = -1;
+
+  iniciarLiga();
+  marcarBotonEstrategia();
+  document.getElementById("posicionesHistoricas").style.display = posicionesHistoricas.length ? "block" : "block";
+});
+
+function iniciarLiga(){
+  const origen = (ligaSelect.value === "1") ? liga1 : (ligaSelect.value === "2") ? liga2 : liga3;
+  equipos = origen.slice(0,20).map(e=>({ ...e }));
+  tabla = equipos.map(eq => ({
+    nombre: eq.nombre,
+    puntos: 0,
+    gf: 0,
+    gc: 0,
+    dg: 0,
+    ataque: eq.ataque,
+    defensa: eq.defensa
+  }));
+  jornadaActual = 0;
+  resultadosJornada = [];
+  historial_local_jornadas = [];
+  generarCalendario();
+  document.getElementById("numeroJornada").textContent = jornadaActual+1;
+  actualizarTabla();
+  setCurrentMatchUI();
+  document.getElementById("siguienteJornadaBtn").style.display = "none";
+  document.getElementById("otrosResultados").innerHTML = "";
+}
+
+// -------------------- Estrategia --------------------
+
+function cambiarEstrategia(e){
+  estrategiaActual = e;
+  marcarBotonEstrategia();
+}
+function marcarBotonEstrategia(){
+  document.querySelectorAll(".estrategia").forEach(b=>b.classList.remove("active"));
+  if(estrategiaActual==="equilibrada") document.getElementById("btnEquilibrada").classList.add("active");
+  if(estrategiaActual==="ofensiva") document.getElementById("btnOfensiva").classList.add("active");
+  if(estrategiaActual==="defensiva") document.getElementById("btnDefensiva").classList.add("active");
+}
+
+// -------------------- Simulación MINUTO a MINUTO (20s partido) --------------------
+
+let intervaloSim = null;
+
+document.getElementById("iniciarPartidoBtn").addEventListener("click", ()=>{
+  document.getElementById("iniciarPartidoBtn").style.display = "none";
+  resultadosJornada = [];
+  const partidoJugador = getPartidoJugadorHoy();
+  if(!partidoJugador){
+    alert("Tu equipo no juega esta jornada.");
+    document.getElementById("iniciarPartidoBtn").style.display = "inline-block";
+    return;
+  }
+
+  const eqLocalName = partidoJugador[0];
+  const eqVisitanteName = partidoJugador[1];
+  document.getElementById("rival").textContent = (eqLocalName === equipoJugador) ? eqVisitanteName : eqLocalName;
+
+  const masterLocal = findMaster(eqLocalName);
+  const masterVisit = findMaster(eqVisitanteName);
+
+  let factorLocal = 1, factorVisit = 1;
+  if(eqLocalName === equipoJugador){
+    if(estrategiaActual === 'ofensiva') factorLocal = 1.25;
+    if(estrategiaActual === 'defensiva') factorLocal = 0.85;
+  } else if(eqVisitanteName === equipoJugador){
+    if(estrategiaActual === 'ofensiva') factorVisit = 1.25;
+    if(estrategiaActual === 'defensiva') factorVisit = 0.85;
+  }
+
+  const [golesTotLocal, golesTotVisit] = simulateGoals(masterLocal, masterVisit, factorLocal, factorVisit);
+  const golesLocalTimes = [];
+  const golesVisitTimes = [];
+  for(let i=0;i<golesTotLocal;i++) golesLocalTimes.push(rand(1,40));
+  for(let i=0;i<golesTotVisit;i++) golesVisitTimes.push(rand(1,40));
+  golesLocalTimes.sort((a,b)=>a-b);
+  golesVisitTimes.sort((a,b)=>a-b);
+
+  let minutoSimulado = 0;
+  let golLocal = 0, golVisitante = 0;
+  const comentarios = document.getElementById("comentariosPartido");
+  comentarios.innerHTML = "";
+
+  startPitchAnimation();
+
+  // 20 segundos por partido => 20_000 ms / 40 minutos = 500 ms por minuto
+  const velocidad = 500; // ms por "minuto"
+  intervaloSim = setInterval(()=>{
+    minutoSimulado++;
+    document.getElementById("minuto").textContent = minutoSimulado;
+
+    while(golesLocalTimes.length && golesLocalTimes[0] === minutoSimulado){
+      golesLocalTimes.shift();
+      golLocal++;
+      comentarios.innerHTML += `<p>${minutoSimulado}': Gol de ${eqLocalName}</p>`;
+      flashGoal();
+    }
+    while(golesVisitTimes.length && golesVisitTimes[0] === minutoSimulado){
+      golesVisitTimes.shift();
+      golVisitante++;
+      comentarios.innerHTML += `<p>${minutoSimulado}': Gol de ${eqVisitanteName}</p>`;
+      flashGoal();
+    }
+
+    document.getElementById("golLocal").textContent = golLocal;
+    document.getElementById("golVisitante").textContent = golVisitante;
+
+    if(minutoSimulado >= 40){
+      clearInterval(intervaloSim);
+      intervaloSim = null;
+
+      stopPitchAnimation();
+
+      aplicarEfectoResultadoEquipo(eqLocalName, eqVisitanteName, golLocal, golVisitante);
+      actualizarPartido(eqLocalName, eqVisitanteName, golLocal, golVisitante);
+    }
+  }, velocidad);
+});
+
+// -------------------- Efectos de resultados (valores reducidos) --------------------
+// He reducido los valores para que las mejoras por victoria no sean exageradas.
+
+function aplicarEfectoResultadoEquipo(eqA, eqB, golesA, golesB, aplicarTabla=true){
+  const masterA = findMaster(eqA);
+  const masterB = findMaster(eqB);
+  if(!masterA || !masterB) return;
+
+  const winBoost = 0.25;    // ganar: +0.25 (antes 0.7)
+  const drawBoost = 0.08;   // empatar: +0.08 (antes 0.2)
+  const lossDrop = -drawBoost; // perder: -0.08
+
+  if(golesA > golesB){
+    masterA.ataque = clamp(round2(masterA.ataque + winBoost), 40, 99);
+    masterA.defensa = clamp(round2(masterA.defensa + winBoost), 40, 99);
+    masterB.ataque = clamp(round2(masterB.ataque + lossDrop), 40, 99);
+    masterB.defensa = clamp(round2(masterB.defensa + lossDrop), 40, 99);
+  } else if(golesA < golesB){
+    masterB.ataque = clamp(round2(masterB.ataque + winBoost), 40, 99);
+    masterB.defensa = clamp(round2(masterB.defensa + winBoost), 40, 99);
+    masterA.ataque = clamp(round2(masterA.ataque + lossDrop), 40, 99);
+    masterA.defensa = clamp(round2(masterA.defensa + lossDrop), 40, 99);
+  } else {
+    masterA.ataque = clamp(round2(masterA.ataque + drawBoost), 40, 99);
+    masterA.defensa = clamp(round2(masterA.defensa + drawBoost), 40, 99);
+    masterB.ataque = clamp(round2(masterB.ataque + drawBoost), 40, 99);
+    masterB.defensa = clamp(round2(masterB.defensa + drawBoost), 40, 99);
+  }
+
+  const tA = tabla.find(t=>t.nombre===eqA);
+  const tB = tabla.find(t=>t.nombre===eqB);
+  if(tA){ tA.ataque = masterA.ataque; tA.defensa = masterA.defensa; }
+  if(tB){ tB.ataque = masterB.ataque; tB.defensa = masterB.defensa; }
+}
+
+// -------------------- actualizarPartido --------------------
+
+function actualizarPartido(eqLocalName, eqVisitanteName, golesLocal, golesVisitante, llamadaRapida=false){
+  const tLocal = tabla.find(t=>t.nombre===eqLocalName);
+  const tVisit = tabla.find(t=>t.nombre===eqVisitanteName);
+
+  if(!tLocal || !tVisit) return;
+
+  tLocal.gf += golesLocal; tLocal.gc += golesVisitante; tLocal.dg = tLocal.gf - tLocal.gc;
+  tVisit.gf += golesVisitante; tVisit.gc += golesLocal; tVisit.dg = tVisit.gf - tVisit.gc;
+
+  if(golesLocal > golesVisitante) tLocal.puntos += 3;
+  else if(golesLocal < golesVisitante) tVisit.puntos += 3;
+  else { tLocal.puntos += 1; tVisit.puntos += 1; }
+
+  if(!llamadaRapida){
+    const partidosHoy = getPartidosHoy();
+    partidosHoy.forEach(p=>{
+      if(!p.includes(equipoJugador)){
+        const nombreA = p[0], nombreB = p[1];
+        const masterA = findMaster(nombreA);
+        const masterB = findMaster(nombreB);
+        const [golesA, golesB] = simulateGoals(masterA, masterB, 1, 1);
+        const tA = tabla.find(t=>t.nombre===nombreA);
+        const tB = tabla.find(t=>t.nombre===nombreB);
+        if(tA && tB){
+          tA.gf += golesA; tA.gc += golesB; tA.dg = tA.gf - tA.gc;
+          tB.gf += golesB; tB.gc += golesA; tB.dg = tB.gf - tB.gc;
+          if(golesA > golesB) tA.puntos += 3;
+          else if(golesA < golesB) tB.puntos += 3;
+          else { tA.puntos += 1; tB.puntos += 1; }
+          resultadosJornada.push(`${nombreA} ${golesA} - ${golesB} ${nombreB}`);
+          aplicarEfectoResultadoEquipo(nombreA, nombreB, golesA, golesB, false);
+        }
+      }
+    });
+  }
+
+  resultadosJornada.unshift(`${eqLocalName} ${golesLocal} - ${golesVisitante} ${eqVisitanteName}`);
+  document.getElementById("otrosResultados").innerHTML = resultadosJornada.map(r=>`<p>${r}</p>`).join('');
+  actualizarTabla();
+
+  guardarJornadaEnHistorial();
+
+  document.getElementById("siguienteJornadaBtn").style.display = "inline-block";
+  document.getElementById("iniciarPartidoBtn").style.display = "none";
+}
+
+// -------------------- Guardado de jornadas --------------------
+
+function guardarJornadaEnHistorial(){
+  if(!resultadosJornada || resultadosJornada.length===0) return;
+  if(ultimaJornadaGuardada === jornadaActual) return;
+  historial_local_jornadas.push([...resultadosJornada]);
+  ultimaJornadaGuardada = jornadaActual;
+}
+
+// -------------------- Siguiente jornada desde UI --------------------
+
+function siguienteJornadaFromUI(){
+  const partidosPorJornada = 20 / 2;
+  const jornadasTotales = TOTAL_JORNADAS;
+  if(jornadaActual >= jornadasTotales - 1){
+    finalizarTemporada();
+    return;
+  }
+  jornadaActual++;
+  document.getElementById("numeroJornada").textContent = jornadaActual+1;
+  setCurrentMatchUI();
+  document.getElementById("siguienteJornadaBtn").style.display = "none";
+  resultadosJornada = [];
+  document.getElementById("otrosResultados").innerHTML = "";
+}
+
+// -------------------- finalizarTemporada (3 suben / 3 bajan) --------------------
+
+async function finalizarTemporada(){
+  if(seasonFinalized) return;
+  seasonFinalized = true;
+
+  const ordenada = [...tabla].sort((a,b)=> b.puntos - a.puntos || b.dg - a.dg || b.gf - a.gf);
+  const campeon = ordenada[0] ? ordenada[0].nombre : null;
+  let ascendidos = [], descendidos = [];
+
+  const ligaActual = (ligaSelect.value === "1") ? "Primera" : (ligaSelect.value === "2") ? "Segunda" : "Tercera";
+
+  if(ligaSelect.value === "1"){
+    descendidos = ordenada.slice(-3).map(t=>t.nombre);
+    descendidos.forEach(name=>{
+      const idx = liga1.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        liga1[idx].ataque = clamp(round2(liga1[idx].ataque - 3), 40, 99);
+        liga1[idx].defensa = clamp(round2(liga1[idx].defensa - 3), 40, 99);
+        liga2.push(liga1[idx]);
+        liga1.splice(idx,1);
+      }
+    });
+    const candidatos = [...liga2].sort((a,b)=> (b.ataque+b.defensa) - (a.ataque+a.defensa));
+    ascendidos = candidatos.slice(0,3).map(e=>e.nombre);
+    ascendidos.forEach(name=>{
+      const idx = liga2.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        liga2[idx].ataque = clamp(round2(liga2[idx].ataque + 3), 40, 99);
+        liga2[idx].defensa = clamp(round2(liga2[idx].defensa + 3), 40, 99);
+        liga1.push(liga2[idx]);
+        liga2.splice(idx,1);
+      }
+    });
+  } else if(ligaSelect.value === "2"){
+    ascendidos = ordenada.slice(0,3).map(t=>t.nombre);
+    ascendidos.forEach(name=>{
+      const idx = liga2.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        liga2[idx].ataque = clamp(round2(liga2[idx].ataque + 3), 40, 99);
+        liga2[idx].defensa = clamp(round2(liga2[idx].defensa + 3), 40, 99);
+        liga1.push(liga2[idx]);
+        liga2.splice(idx,1);
+      }
+    });
+
+    const lastThree = ordenada.slice(-3).map(t=>t.nombre);
+    lastThree.forEach(name=>{
+      const idx = liga2.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        liga2[idx].ataque = clamp(round2(liga2[idx].ataque - 2), 40, 99);
+        liga2[idx].defensa = clamp(round2(liga2[idx].defensa - 2), 40, 99);
+        liga3.push(liga2[idx]);
+        liga2.splice(idx,1);
+      }
+    });
+    descendidos = lastThree.slice();
+
+    while(liga2.length < 20 && liga3.length>0){
+      let bestIdx = 0;
+      for(let i=1;i<liga3.length;i++){
+        if((liga3[i].ataque+liga3[i].defensa) > (liga3[bestIdx].ataque+liga3[bestIdx].defensa)) bestIdx = i;
+      }
+      liga2.push(liga3[bestIdx]);
+      liga3.splice(bestIdx,1);
+    }
+  } else {
+    ascendidos = ordenada.slice(0,3).map(t=>t.nombre);
+    ascendidos.forEach(name=>{
+      const idx = liga3.findIndex(e=>e.nombre===name);
+      if(idx !== -1){
+        liga3[idx].ataque = clamp(round2(liga3[idx].ataque + 3), 40, 99);
+        liga3[idx].defensa = clamp(round2(liga3[idx].defensa + 3), 40, 99);
+        liga2.push(liga3[idx]);
+        liga3.splice(idx,1);
+      }
+    });
+
+    const lastThree = ordenada.slice(-3).map(t=>t.nombre);
+    lastThree.forEach(name=>{
+      const idx = liga3.findIndex(e=>e.nombre===name);
+      if(idx !== -1) liga3.splice(idx,1);
+    });
+    descendidos = lastThree.slice();
+
+    while(liga3.length < 20){
+      const modelo = equiposNuevosTercera[(liga3.length) % equiposNuevosTercera.length];
+      liga3.push({...modelo, nombre: modelo.nombre + " " + (liga3.length+1)});
+    }
+  }
+
+  while(liga2.length < 20){
+    const modelo = equiposNuevosTercera[(liga2.length) % equiposNuevosTercera.length];
+    liga2.push({...modelo, nombre: modelo.nombre + " (fill)"});
+  }
+  while(liga1.length < 20){
+    if(liga2.length>0){
+      let bestIdx = 0;
+      for(let i=1;i<liga2.length;i++){
+        if((liga2[i].ataque+liga2[i].defensa) > (liga2[bestIdx].ataque+liga2[bestIdx].defensa)) bestIdx = i;
+      }
+      liga1.push(liga2[bestIdx]);
+      liga2.splice(bestIdx,1);
+    } else break;
+  }
+
+  const existe = historialTemporadas.some(h => h.temporada === temporada && h.liga === ligaActual);
+  if(!existe){
+    historialTemporadas.push({
+      temporada,
+      liga: ligaActual,
+      campeon,
+      ascendidos,
+      descendidos,
+      jornadas: historial_local_jornadas || []
+    });
+  }
+
+  const ordenFinal = [...tabla].sort((a,b)=> b.puntos - a.puntos || b.dg - a.dg || b.gf - a.gf);
+  const posicionJugador = ordenFinal.findIndex(t=>t.nombre===equipoJugador);
+  const already = posicionesHistoricas.find(p => p.temporada === temporada);
+  if(!already){
+    posicionesHistoricas.push({ temporada, posicion: posicionJugador === -1 ? null : posicionJugador+1 });
+  }
+
+  const resumenLines = [];
+  resumenLines.push(`<p><strong>Temporada ${temporada} finalizada — Liga: ${ligaActual}</strong></p>`);
+  resumenLines.push(`<p>Campeón: <strong>${campeon}</strong></p>`);
+  if(ascendidos.length) resumenLines.push(`<p>Ascendidos: ${ascendidos.join(", ")}</p>`);
+  if(descendidos.length) resumenLines.push(`<p>Descendidos o eliminados: ${descendidos.join(", ")}</p>`);
+
+  // Nuevo: botón para iniciar siguiente temporada automáticamente (conservando equipo)
+  resumenLines.push(`<div style="margin-top:8px"><button class="btn" onclick="iniciarSiguienteTemporada(true)">Iniciar nueva temporada (automático)</button>
+                     <button class="btn" onclick="iniciarSiguienteTemporada(false)">Volver a elegir equipo</button></div>`);
+
+  document.getElementById("resumenTemporada").style.display = "block";
+  document.getElementById("resumenTemporada").innerHTML = resumenLines.join("");
+
+  // Si campeón de Primera -> Copa del Rey especial (se mantiene)
+  if(campeon === equipoJugador && ligaActual === "Primera"){
+    await jugarCopaDelReyYMostrar([{ nombre: "Atletico Madrid FS", ataque:98, defensa:97 },
+                                   { nombre: "Barcelona FS", ataque:99, defensa:98 },
+                                   { nombre: "Madrid FS", ataque:98, defensa:98 }]);
+  } else {
+    // mostrar fichajes según posición (sin revelar medias)
+    mostrarOpcionesFichajes(posicionJugador === -1 ? 999 : posicionJugador+1);
+  }
+
+  renderHistorial();
+  renderPosicionesHistoricas();
+}
+
+// -------------------- Partidos especiales (Copa del Rey) --------------------
+
+function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+async function jugarCopaDelReyYMostrar(rivales){
+  const container = document.getElementById("resumenTemporada");
+  const titulo = document.createElement('div');
+  titulo.innerHTML = `<h3>Copa del Rey - Partidos especiales</h3>`;
+  container.appendChild(titulo);
+
+  const masterJugador = findMaster(equipoJugador);
+
+  for(const riv of rivales){
+    const matchDiv = document.createElement('div');
+    matchDiv.style.marginTop = '8px';
+    matchDiv.innerHTML = `<strong>${equipoJugador}</strong> vs <strong>${riv.nombre}</strong> — simulando...`;
+    container.appendChild(matchDiv);
+
+    startPitchAnimation();
+    await sleep(350);
+
+    const [gA, gB] = simulateGoals(masterJugador, riv, 1, 1.05);
+    const showDiv = document.createElement('div');
+    showDiv.style.marginTop = '6px';
+    showDiv.innerHTML = `<p>Resultado: ${equipoJugador} ${gA} - ${gB} ${riv.nombre}</p>`;
+    container.appendChild(showDiv);
+    if(gA !== gB) flashGoal();
+    await sleep(900);
+    stopPitchAnimation();
+    await sleep(400);
+  }
+
+  const finalNote = document.createElement('div');
+  finalNote.style.marginTop = '8px';
+  finalNote.innerHTML = `<p>Secuencia de Copa del Rey finalizada.</p>`;
+  document.getElementById("resumenTemporada").appendChild(finalNote);
+}
+
+// -------------------- Fichajes (probabilidades reducidas y sin mostrar medias) --------------------
+
+function mostrarOpcionesFichajes(posicion){
+  let options = [];
+  if(posicion === 1){
+    options = ['Tu pueblo','Talavera','Toledo','Madrid','No fichar'];
+  } else if(posicion > 1 && posicion <= 10){
+    options = ['Tu pueblo','Talavera','Toledo','No fichar'];
+  } else {
+    options = ['Tu pueblo','No fichar'];
+  }
+
+  const cont = document.createElement('div');
+  cont.className = 'transfer-options';
+  cont.innerHTML = `<h3>Opciones de fichajes</h3><p>Selecciona una opción para intentar mejorar la plantilla:</p>`;
+  options.forEach(opt=>{
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = opt;
+    btn.onclick = ()=>resolverFichaje(opt);
+    cont.appendChild(btn);
+  });
+  document.getElementById("resumenTemporada").appendChild(cont);
+}
+
+function resolverFichaje(opcion){
+  const masterJugador = findMaster(equipoJugador);
+  let cambio = 0;
+  const r = Math.random();
+  if(opcion === 'Tu pueblo'){
+    if(r < 0.10) cambio = 1; // menos probabilidad
+  } else if(opcion === 'Talavera'){
+    if(r < 0.25) cambio = 1;
+    else if(r < 0.35) cambio = -1;
+  } else if(opcion === 'Toledo'){
+    if(r < 0.25) cambio = 1;
+    else if(r < 0.50) cambio = -1;
+  } else if(opcion === 'Madrid'){
+    if(r < 0.35) cambio = 1;
+    else if(r < 0.55) cambio = -1;
+  } else {
+    // no fichar => cambio 0
+  }
+
+  masterJugador.ataque = clamp(round2(masterJugador.ataque + cambio), 40, 99);
+  masterJugador.defensa = clamp(round2(masterJugador.defensa + cambio), 40, 99);
+
+  // No mostramos las medias numéricas tras el fichaje (lo solicitaste).
+  const msg = document.createElement('div');
+  msg.innerHTML = `<p>Fichaje realizado: ${opcion}.</p>`;
+  document.getElementById("resumenTemporada").appendChild(msg);
+
+  const opts = document.querySelector('.transfer-options');
+  if(opts) opts.remove();
+  actualizarTabla();
+}
+
+// -------------------- Historial / Posiciones --------------------
+
+function renderHistorial(){
+  historialDiv.innerHTML = "";
+  historialTemporadas.slice().reverse().forEach((s, idx)=>{
+    const div = document.createElement("div");
+    div.className = "season";
+    const seasonId = `season-${idx}`;
+    div.innerHTML = `<strong>Temporada ${s.temporada} — ${s.liga}</strong>
+                     <div style="font-size:13px;margin-top:6px">Campeón: <strong>${s.campeon}</strong></div>
+                     <div style="margin-top:6px"><button class="btn" onclick="toggleSeason('${seasonId}')">Ver jornadas</button></div>
+                     <div id="${seasonId}" style="display:none;margin-top:8px">` +
+                     (s.jornadas && s.jornadas.length ? s.jornadas.map((j,i)=>`<div class="jornada"><strong>Jornada ${i+1}</strong><div>${j.map(r=>`<div>${r}</div>`).join("")}</div></div>`).join("") : `<div style="padding:8px">No hay detalle de jornadas guardado.</div>`) +
+                     `</div>`;
+    historialDiv.appendChild(div);
+  });
+}
+function toggleSeason(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = (el.style.display === "none") ? "block" : "none";
+}
+
+function renderPosicionesHistoricas(){
+  document.getElementById("posicionesHistoricas").style.display = "block";
+  const cont = document.getElementById("posicionesList");
+  if(!posicionesHistoricas.length){
+    cont.innerHTML = "No hay temporadas jugadas todavía.";
+    return;
+  }
+  cont.innerHTML = posicionesHistoricas.map(p=>`<div>${p.temporada}: posición ${p.posicion === null ? 'N/A' : p.posicion}</div>`).join("");
+}
+
+// -------------------- Iniciar siguiente temporada --------------------
+// autoStart = true -> iniciar automáticamente la nueva temporada y mantener tu equipo
+// autoStart = false -> mostrar selección para elegir equipo
+
+function iniciarSiguienteTemporada(autoStart = false){
+  // incrementar temporada label
+  const start = parseInt(temporada.split("/")[0],10);
+  temporada = (start + 1) + "/" + (start + 2);
+  temporadaSpan.textContent = temporada;
+
+  if(!autoStart){
+    // Mostrar UI de selección para que el usuario elija nuevo equipo o la misma
+    document.getElementById("seleccionEquipo").style.display = "block";
+    document.getElementById("partido").style.display = "none";
+    document.getElementById("resumenTemporada").style.display = "none";
+    temporada = temporada; // label ya actualizado
+    // reset protecciones e historial de jornada local
+    seasonFinalized = false;
+    ultimaJornadaGuardada = -1;
+    historial_local_jornadas = [];
+    resultadosJornada = [];
+    renderTeamGrid();
+    cargarEquipos();
+    return;
+  }
+
+  // autoStart: detectar en qué liga quedó tu equipo (tras ascensos/descensos) y arrancar esa liga
+  let nuevaLiga = "3";
+  if(liga1.find(e=>e.nombre===equipoJugador)) nuevaLiga = "1";
+  else if(liga2.find(e=>e.nombre===equipoJugador)) nuevaLiga = "2";
+  else nuevaLiga = "3";
+
+  // set select value and start
+  ligaSelect.value = nuevaLiga;
+  renderTeamGrid();
+  cargarEquipos();
+  // keep equipoJugador as is (su objeto ya movido entre ligas en finalizarTemporada)
+  // iniciar liga automáticamente en la liga donde está tu equipo
+  document.getElementById("seleccionEquipo").style.display = "none";
+  document.getElementById("partido").style.display = "block";
+  seasonFinalized = false;
+  ultimaJornadaGuardada = -1;
+  iniciarLiga();
+  // marcar estrategia boton
+  marcarBotonEstrategia();
+}
+
+// -------------------- Actualizar tabla UI --------------------
+
+function actualizarTabla(){
+  const tbody = document.querySelector("#tablaClasificacion tbody");
+  tbody.innerHTML = "";
+  tabla.sort((a,b) => b.puntos - a.puntos || b.dg - a.dg || b.gf - a.gf);
+  tabla.forEach((t,i)=>{
+    let clase = "";
+    if(t.nombre === equipoJugador) clase = "tu-equipo";
+    if(ligaSelect.value === "2" && i < 3) clase = "ascenso";
+    if(i >= tabla.length - 3) clase = "descenso";
+    tbody.innerHTML += `<tr class="${clase}"><td>${t.nombre}</td><td>${t.puntos}</td><td>${t.gf}</td><td>${t.gc}</td><td>${t.dg}</td></tr>`;
+  });
+}
+
+// -------------------- Atajos y misc --------------------
+
+document.addEventListener('keydown', (e)=>{
+  if(e.key.toLowerCase() === 'p'){
+    // ya no hay simular rapido; dejar atajo desactivado
+  }
+});
+
+// fin script
+</script>
+</body>
+</html>
